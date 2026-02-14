@@ -6,6 +6,7 @@ FastAPI backend: run a leaf image through the PlantDoc model.
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from plantdoc.predict import load_model_and_classes, predict_from_bytes
@@ -15,6 +16,13 @@ MODEL_PATH = ROOT / "vgg16_plantdoc.weights.h5"
 CLASSES_PATH = ROOT / "class_names.json"
 
 app = FastAPI(title="PlantDoc API", description="Plant disease classification from leaf images")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 model = None
 class_names = None
@@ -50,7 +58,7 @@ async def predict(file: UploadFile = File(..., description="Leaf image (jpg/png)
         raise HTTPException(422, f"Prediction failed (invalid image?): {e}")
     return PredictResponse(
         label=label,
-        confidence=round(conf, 4),
+        confidence=round(1.0 - conf, 4),
         all_classes=probs,
     )
 

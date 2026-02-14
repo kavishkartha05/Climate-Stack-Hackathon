@@ -3,25 +3,38 @@ import type { ModelPrediction, ScanResult, WeatherBadgeData } from '../types';
 import { DISEASE_DB, getFallbackEntry } from '../data/diseases';
 
 // ─────────────────────────────────────────────────────
-//  CONFIG: point this at your inference API when ready
-//  POST body:  { image: string }  (base64-encoded)
-//  Expected:   { label: string, confidence: number }
+//  CONFIG: inference API (FastAPI backend)
+//  Set to null to use mock responses for development
 // ─────────────────────────────────────────────────────
-const MODEL_ENDPOINT: string | null = null;
+const MODEL_ENDPOINT: string | null = 'http://localhost:8000/predict';
 
 // Davis, CA fallback coordinates
 const DEFAULT_LAT = 38.5449;
 const DEFAULT_LON = -121.7405;
 
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, base64] = dataUrl.split(',');
+  const mime = header?.match(/:(.*?);/)?.[1] ?? 'image/png';
+  const bytes = atob(base64!);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
 async function callModel(imageDataUrl: string): Promise<ModelPrediction> {
   if (MODEL_ENDPOINT) {
-    const base64 = imageDataUrl.split(',')[1];
+    const blob = dataUrlToBlob(imageDataUrl);
+    const form = new FormData();
+    form.append('file', blob, 'leaf.png');
+
     const res = await fetch(MODEL_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: base64 }),
+      body: form,
     });
-    if (!res.ok) throw new Error(`Model API error: ${res.status}`);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Model API error ${res.status}: ${text}`);
+    }
     return res.json();
   }
 
